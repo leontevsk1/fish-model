@@ -1,2 +1,4 @@
 *.out
 *.csv
+diff.log
+*.png

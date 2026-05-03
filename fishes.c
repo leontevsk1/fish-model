@@ -1,12 +1,12 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
-#define XQ 100
-#define YQ 100
+#define XQ 500
+#define YQ 500
 #define FB 10   // Порог размножения рыб
 #define SB 50   // Порог размножения акул
 #define SH 15   // Лимит голодания акул
-#define GQ 2000 // Максимум поколений
+#define GQ 3000 // Максимум поколений
 
 typedef struct {
     char nm;    // 'w' - вода, 'f' - рыба, 's' - акула
