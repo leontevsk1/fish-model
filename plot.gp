@@ -10,7 +10,7 @@ set style line 2 lc rgb '#e63320' lt 1 lw 1.5
 set terminal pngcairo size 800,600 font "Arial,11"
 
 # --- ГРАФИК 1: Сохранение временного ряда ---
-set output "time_series.png"
+set output "base_time_series.png"
 set title "Динамика популяций (временной ряд)"
 set xlabel "Поколение (t)"
 set ylabel "Численность особей (N)"
@@ -21,7 +21,7 @@ plot "results.csv" using 1:2 with lines ls 1 title "Рыбы (N_f)", \
 
 # --- ГРАФИК 2: Сохранение фазового портрета ---
 # Смена выходного файла
-set output "phase_portrait.png"
+set output "base_phase_portrait.png"
 set title "Фазовый портрет системы"
 set xlabel "Численность рыб (N_f)"
 set ylabel "Численность акул (N_s)"
@@ -39,7 +39,7 @@ stats "results.csv" using 3 name "S" nooutput
 
 # Настройка терминала и файла
 set terminal pngcairo size 800,400 font "Arial,11"
-set output "time_series_normalized.png"
+set output "base_time_series_normalized.png"
 
 set title "Нормализованная динамика популяций (масштаб 0..1)"
 set xlabel "Поколение (t)"
