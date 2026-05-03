@@ -1,202 +1,117 @@
-#define _POSIX_C_SOURCE 199309L
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <stdint.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include "sdl_fb.h"
-#ifndef XQ
-#define XQ 200
-#endif
-#ifndef YQ
-#define YQ 200
-#endif
-#ifndef SIZE
-#define SIZE 4
-#endif
-#define FB 10 //до размножения рыб
-#define SB 55 //до размножения акул
-#define SH 40 //сколько акула живет без еды
-#define GQ 5000 //максимальное количество поколений
 
-#define RED 0xFF0000 //#RRGGBB
-#define GREEN 0x00FF00
-#define BLUE  0x0000FF
-#define WHITE 0xFFFFFF
-#define BLACK 0x000000
+#define XQ 40
+#define YQ 20
+#define FB 10 // Шагов до размножения рыб (Mp)
+#define SB 50 // Шагов до размножения акул (Ma)
+#define SH 15 // Лимит голода акул (Na)
+#define GQ 1000 // Максимальное количество поколений
 
 typedef struct {
-  char nm;
-  uint8_t hc, bc;
-  uint32_t flag;
-} cell; //Структура для особи 
+    char nm;   // 'w' - вода, 'f' - рыба, 's' - акула
+    int bc;    // Возраст
+    int hc;    // Голод
+    int flag;  // Метка текущего хода
+} cell;
 
-int fqnt, sqnt;
+cell sea[YQ][XQ];
+int fqnt = 0, sqnt = 0;
 
-//Подсчет соседей клетки и заполнение массива рядом лежащих 
-int nbr (cell sea[YQ][XQ], int y, int x, char tn, int target[4][2]) {
-  int tq = 0;// target[n][0] -- y,  target[n][1] -- x
-  int dx, dy, c;
-  for(c = 0; c < 4; c++) {
-    dx = ((c / 2) * 2 - 1) * (1 - c%2);
-    dy = (1 - (c / 2) * 2) * (c%2);
-    if(sea[(y+dy+YQ)%YQ][(x+dx+XQ)%XQ].nm == tn) {
-      target[tq][1] = (x+dx+XQ)%XQ;
-      target[tq++][0] = (y+dy+YQ)%YQ;
+// Поиск соседей заданного типа (тор)
+int get_neighbors(int y, int x, char type, int tr[4][2]) {
+    int count = 0;
+    int dy[] = {-1, 1, 0, 0}, dx[] = {0, 0, -1, 1};
+    for (int i = 0; i < 4; i++) {
+        int ny = (y + dy[i] + YQ) % YQ;
+        int nx = (x + dx[i] + XQ) % XQ;
+        if (sea[ny][nx].nm == type) {
+            tr[count][0] = ny;
+            tr[count][1] = nx;
+            count++;
+        }
     }
-  }
-  for(c = tq, target[tq][0]=-1, target[tq][1]=-1; c < 4; c++, target[c][0]=-1, target[c][1]=-1);
-  return tq;
+    return count;
 }
 
-//ход
-int step (cell sea[YQ][XQ], int y, int x, int generation) {
-  int tq, fq, tr[4][2], r, xn, yn;
-  if((sea[y][x].nm == 'f') && (sea[y][x].flag <= generation)) {//Рыба 
+void step(int y, int x, int gen) {
+    if (sea[y][x].flag == gen || sea[y][x].nm == 'w') return;
+
+    int tr[4][2], count;
+    sea[y][x].flag = gen;
     sea[y][x].bc++;
-    tq = nbr(sea,y,x,'w',tr);//Подсчет свободных
-    if(tq != 0) {
-      r = rand()%tq;//Выбор случайной клетки
-      yn = tr[r][0]; xn = tr[r][1];
-      sea[yn][xn] = sea[y][x];
-      sea[yn][xn].flag = generation + 1;//Запись флага о ходе
-      if(sea[yn][xn].bc > FB){ //Проверка на размножение
-	sea[yn][xn].bc = rand()%3;
-      	sea[y][x] = (cell){.nm='f',.bc=0,.hc=0,.flag=generation+1};//Размножение
-	fqnt++;
-      }else
-	sea[y][x] = (cell){.nm='w',.bc=0,.hc=0,.flag=0};//Обнуление
-    }else if(sea[y][x].bc > FB)
-      sea[y][x].bc = 0;
-  } else if (sea[y][x].nm == 's' && sea[y][x].flag <= generation) {
-    sea[y][x].bc++;//Становится старше
-    sea[y][x].hc++;//Голоднее
-    if(sea[y][x].hc > SH) {
-      sea[y][x] = (cell){.nm='w',.bc=0,.hc=0,.flag=0};
-      sqnt--;
-      return 0;
-    }
-    fq = nbr(sea,y,x,'f',tr);//Подсчет рыб
-    if(fq != 0) {
-      sea[y][x].hc = 0;
-      fqnt--;
-      r = rand()%fq;//Выбор случайной клетки с рыбой
-      yn = tr[r][0]; xn = tr[r][1];
-      sea[yn][xn] = sea[y][x];
-      sea[yn][xn].flag = generation + 1;//Запись флага о ходе
-      if(sea[yn][xn].bc > SB){ //Проверка на размножение
-	sea[yn][xn].bc = rand()%3;
-	sqnt++;
-      	sea[y][x] = (cell){.nm='s',.bc=0,.hc=0,.flag=generation+1};//Размножение
-      }else{
-	sea[y][x] = (cell){.nm='w',.bc=0,.hc=0,.flag=0};//Обнуление
-      }
-      return 0;
-    }
-    tq = nbr(sea,y,x,'w',tr);//Подсчет свободных
-    if(tq != 0) {
-      r = rand()%tq;//Выбор случайной клетки с рыбой
-      yn = tr[r][0]; xn = tr[r][1];
-      sea[yn][xn] = sea[y][x];
-      sea[yn][xn].flag = generation + 1;//Запись флага о ходе
-      if(sea[yn][xn].bc > SB){ //Проверка на размножение
-	sea[yn][xn].bc = rand()%3;
-	sqnt++;
-      	sea[y][x] = (cell){.nm='s',.bc=0,.hc=0,.flag=generation+1};//Размножение
-      }else
-	sea[y][x] = (cell){.nm='w',.bc=0,.hc=0,.flag=0};//Обнуление
-      return 0;
-    }else if(sea[y][x].bc > SB)
-      sea[y][x].bc = 0;
-  }
-  return 0;
-}
 
-//Обновление массива для фреймбуфера
-void update_field(cell sea[YQ][XQ], uint32_t* color_field, uint32_t w_c, uint32_t f_c, uint32_t s_c) {
-  for(size_t cy = 0; cy < YQ; cy++) {
-    for(size_t cx = 0; cx < XQ; cx++) {
-      switch(sea[cy][cx].nm) {
-      case 'w': {
-	color_field[cy * XQ + cx] = w_c;
-	break;
-      }
-      case 'f': {
-	color_field[cy * XQ + cx] = f_c;
-	break;
-      }
-      case 's': {
-	color_field[cy * XQ + cx] = s_c;
-	break;
-      }
-      }
+    if (sea[y][x].nm == 'f') { // ЛОГИКА РЫБЫ
+        count = get_neighbors(y, x, 'w', tr);
+        if (count > 0) {
+            int r = rand() % count;
+            int ny = tr[r][0], nx = tr[r][1];
+            sea[ny][nx] = sea[y][x];
+            if (sea[ny][nx].bc >= FB) {
+                sea[ny][nx].bc = 0;
+                sea[y][x] = (cell){'f', 0, 0, gen};
+                fqnt++;
+            } else {
+                sea[y][x] = (cell){'w', 0, 0, 0};
+            }
+        }
+    } else { // ЛОГИКА АКУЛЫ
+        sea[y][x].hc++;
+        count = get_neighbors(y, x, 'f', tr);
+        int eating = (count > 0);
+        
+        if (!eating) count = get_neighbors(y, x, 'w', tr);
+        
+        if (sea[y][x].hc >= SH) {
+            sea[y][x] = (cell){'w', 0, 0, 0};
+            sqnt--;
+        } else if (count > 0) {
+            int r = rand() % count;
+            int ny = tr[r][0], nx = tr[r][1];
+            if (eating) fqnt--;
+            sea[ny][nx] = sea[y][x];
+            if (eating) sea[ny][nx].hc = 0;
+            if (sea[ny][nx].bc >= SB) {
+                sea[ny][nx].bc = 0;
+                sea[y][x] = (cell){'s', 0, 0, gen};
+                sqnt++;
+            } else {
+                sea[y][x] = (cell){'w', 0, 0, 0};
+            }
+        }
     }
-  }
-}
-
-//Задание начальной конфигурации
-void field_init(cell sea[YQ][XQ], double psb_fish, double psb_shark) {
-  double r;
-  // Заполнение
-  for(int cy = 0; cy < YQ; cy++) {
-    for (int cx = 0; cx < XQ; cx++) {
-      r = rand()/(RAND_MAX + 1.0);
-      if(r < psb_fish) {
-	sea[cy][cx] = (cell){.nm='f',.bc=rand()%FB,.hc=0,.flag=0};
-	fqnt++;
-      } else if(r < psb_fish + psb_shark) {
-	sea[cy][cx] = (cell){.nm='s',.bc=rand()%SB,.hc=rand()%SH,.flag=0};
-	sqnt++;
-      } else {
-	sea[cy][cx] = (cell){.nm='w',.bc=0,.hc=0,.flag=0};
-      }
-    }
-  }  
-}
-
-//Затравка случайного числа
-void random_init() {
-  int fd = open("/dev/urandom", O_RDONLY);
-  int seed;
-  read(fd, &seed, sizeof(seed));
-  srand(seed);
-}
-
-//Ожидание
-void sleep_ms(int milliseconds) {
-    struct timespec ts;
-    ts.tv_sec = milliseconds / 1000;
-    ts.tv_nsec = (milliseconds % 1000) * 1000000;
-    nanosleep(&ts, NULL);
 }
 
 int main() {
-  random_init();
+    srand(time(NULL));
+    FILE *log = fopen("population.csv", "w");
+    fprintf(log, "Gen,Fish,Sharks\n");
 
-  double fp = 0.03, sp = 0.005 + fp;
-  cell (*sea)[XQ] = malloc(sizeof(cell) * XQ * YQ);
-  field_init(sea, fp, sp);
-  
-  uint32_t color_map[YQ][XQ] = {0};
-  sdl_fb_init(XQ, YQ, SIZE, "Some title", color_map);
-  int stop = 0, delay_ms = 1000;
-  
-  //Вывод
-  for(int c = 0; c < GQ && fqnt + sqnt > 0; c++) {
-    update_field(sea, (uint32_t *)color_map, BLACK, GREEN, RED);
-    sdl_fb_update();
-    sdl_fb_handle_input(&stop, &delay_ms);
-    if(stop == 2) break;
-    sleep_ms(delay_ms);
-    //    printf("%i %i %i\n", c, fqnt, sqnt);
-    if(!stop)
-    for (int cy = 0; cy < YQ; cy++) 
-      for(int cx = 0; cx < XQ; cx++) {
-	step(sea,cy,cx,c);
-      }
-  }
-  sdl_fb_cleanup();
-  free(sea);
-  return 0;
+    // Инициализация
+    for (int y = 0; y < YQ; y++) {
+        for (int x = 0; x < XQ; x++) {
+            double r = rand() / (double)RAND_MAX;
+            if (r < 0.1) { sea[y][x] = (cell){'f', rand() % FB, 0, 0}; fqnt++; }
+            else if (r < 0.15) { sea[y][x] = (cell){'s', rand() % SB, rand() % SH, 0}; sqnt++; }
+            else sea[y][x] = (cell){'w', 0, 0, 0};
+        }
+    }
+
+    for (int g = 1; g <= GQ && (fqnt + sqnt) > 0; g++) {
+        // Отрисовка в консоль
+        printf("\033[HGen: %d | Fish: %d | Sharks: %d\n", g, fqnt, sqnt);
+        for (int y = 0; y < YQ; y++) {
+            for (int x = 0; x < XQ; x++) putchar(sea[y][x].nm == 'f' ? 'f' : (sea[y][x].nm == 's' ? 's' : '.'));
+            putchar('\n');
+        }
+        
+        fprintf(log, "%d,%d,%d\n", g, fqnt, sqnt);
+
+        for (int y = 0; y < YQ; y++)
+            for (int x = 0; x < XQ; x++) step(y, x, g);
+    }
+
+    fclose(log);
+    return 0;
 }
