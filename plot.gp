@@ -1,53 +1,61 @@
+# =================================================================
+# Gnuplot script: Визуализация модифицированной модели Ва-Тор
+# =================================================================
+
 # Настройка формата входных данных
 set datafile separator ","
 set grid
+set terminal pngcairo size 1000,700 font "Arial,11"
 
 # Стили линий
-set style line 1 lc rgb '#00ad4e' lt 1 lw 1.5 # Рыбы (Жертвы) - Зеленый
-set style line 2 lc rgb '#e63320' lt 1 lw 1.5 # Акулы (Хищники) - Красный
-set style line 3 lc rgb '#0072bd' lt 1 lw 1.5 # Корм (Водоросли) - Синий
+set style line 1 lc rgb '#00ad4e' lt 1 lw 2.0 # Рыбы (Зеленый)
+set style line 2 lc rgb '#e63320' lt 1 lw 2.0 # Акулы (Красный)
+set style line 3 lc rgb '#0072bd' lt 1 lw 1.5 # Корм (Синий)
+set style line 4 lc rgb '#444444' lt 1 lw 1.2 # Фазовая траектория
 
-# Общая настройка терминала
-set terminal pngcairo size 800,600 font "Arial,11"
+# Список сценариев из программы (результаты_mod_*.csv)
+scenarios = "stable_focus prey_balance resource_only"
 
-# --- ГРАФИК 1: Временной ряд (Абсолютные значения) ---
-set output "mod_time_series.png"
-set title "Динамика трехуровневой системы (Хищник - Жертва - Корм)"
-set xlabel "Поколение (t)"
-set ylabel "Численность особей / Объем ресурса"
-set key top right
+do for [scen in scenarios] {
+    
+    infile = "results_mod_".scen.".csv"
+    
+    # 1. Сбор статистики для нормализации
+    # Gnuplot рассчитает максимумы F_max, S_max, K_max для каждого файла
+    stats infile using 2 name "F" nooutput
+    stats infile using 3 name "S" nooutput
+    stats infile using 4 name "K" nooutput
 
-plot "results_mod.csv" using 1:2 with lines ls 1 title "Рыбы (N_f)", \
-     "results_mod.csv" using 1:3 with lines ls 2 title "Акулы (N_s)", \
-     "results_mod.csv" using 1:4 with lines ls 3 title "Корм"
+    # --- ГРАФИК 1: Временной ряд (Абсолютные значения) ---
+    set output "mod_".scen."_time_series.png"
+    set title "Динамика системы: Сценарий ".scen
+    set xlabel "Поколение (t)"
+    set ylabel "Численность особей / Объем ресурса"
+    set key top right
+    
+    plot infile using 1:2 with lines ls 1 title "Рыбы (N_f)", \
+         infile using 1:3 with lines ls 2 title "Акулы (N_s)", \
+         infile using 1:4 with lines ls 3 title "Корм (N_k)"
 
-# --- ГРАФИК 2: Фазовый портрет (Рыбы vs Акулы) ---
-set output "mod_phase_portrait.png"
-set title "Фазовый портрет при лимитированном ресурсе"
-set xlabel "Численность рыб (N_f)"
-set ylabel "Численность акул (N_s)"
-unset key
+    # --- ГРАФИК 2: Фазовый портрет (Рыбы vs Акулы) ---
+    set output "mod_".scen."_phase_portrait.png"
+    set title "Фазовый портрет (Рыбы - Акулы): ".scen
+    set xlabel "Численность рыб (N_f)"
+    set ylabel "Численность акул (N_s)"
+    unset key
+    
+    # Визуализация фокуса или предельного цикла
+    plot infile using 2:3 with lines ls 4
 
-# Отрисовываем фазовую траекторию для хищников и жертв
-plot "results_mod.csv" using 2:3 with lines lc rgb "#444444" lw 1.2
-
-# --- ГРАФИК 3: Нормализованный временной ряд ---
-set key top right
-
-# Сбор статистики для поиска максимумов
-stats "results_mod.csv" using 2 name "F" nooutput
-stats "results_mod.csv" using 3 name "S" nooutput
-stats "results_mod.csv" using 4 name "K" nooutput
-
-# Изменение пропорций для нормализованного графика
-set terminal pngcairo size 800,400 font "Arial,11"
-set output "mod_time_series_normalized.png"
-
-set title "Нормализованная динамика популяций (масштаб 0..1)"
-set xlabel "Поколение (t)"
-set ylabel "Доля от максимальной численности"
-
-# Отрисовка с делением на максимум
-plot "results_mod.csv" using 1:($2/F_max) with lines ls 1 title "Рыбы (норм.)", \
-     "results_mod.csv" using 1:($3/S_max) with lines ls 2 title "Акулы (норм.)", \
-     "results_mod.csv" using 1:($4/K_max) with lines ls 3 title "Корм (норм.)"
+    # --- ГРАФИК 3: Нормализованный временной ряд ---
+    set output "mod_".scen."_normalized.png"
+    set title "Нормализованная динамика: ".scen
+    set ylabel "Доля от N_{max}"
+    set key outside bottom center horizontal
+    
+    plot infile using 1:($2/F_max) with lines ls 1 title "Рыбы (норм.)", \
+         infile using 1:($3/S_max) with lines ls 2 title "Акулы (норм.)", \
+         infile using 1:($4/K_max) with lines ls 3 title "Корм (норм.)"
+    
+    print "Processed mod scenario: ".scen
+}
